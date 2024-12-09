@@ -1,0 +1,287 @@
+---
+title: "Project Report DSCI"
+author: "Deasy Pasaribu"
+format: html
+editor: visual
+---
+
+## **Project Report**
+
+### Data Analysis on Building Violations in Chicago
+
+This project utilizes a dataset of Building Violations in Chicago provided by City of Chicago Data Portal. The dataset itself contains building violation reports from 2006 through 2024. For this project I have limited the scope of the year that is from 2014 through 2024 for the reason of focus on the cases during the decade and for computational efficiency as the dataset is large so filtering it based on the chosen period will make it easier and faster to process.
+
+### Question of Interest
+
+1.  What are the most common types of building violations reported? Has it changed over time?
+
+2.  Which neighborhoods or areas in Chicago have the highest number of building violations?
+
+3.  How long, on average, does it take for violations to be resolved after they are reported?
+
+4.  Are there properties or owners that frequently violate building regulations?
+
+5.  Are there particular times of the year when violations are more prevalent? Are there seasonal patterns?
+
+### Potential Complications
+
+There are cases where inspection status is failed but the violation status is complied, could the reason for cases are due to no further action by the authorities or changes in building regulations or any other reason?
+
+### Data
+
+Dataset contains of 198,745 violation with 26 variable columns.
+
+```{r}
+library(dplyr)
+Dataset <- read.csv("Building_Violations_Chicago.csv")
+glimpse(Dataset)
+```
+
+1.  What are the most common types of building violations reported? Has it changed over time?
+
+    ```{r}
+    # Load libraries
+    library(tidyverse)
+    library(ggplot2)
+    library(lubridate)
+
+    # Load dataset
+    Dataset <- read.csv("Building_Violations_Chicago.csv")
+
+    # Convert 'VIOLATION DATE' to 'Date" type and extract the year
+    Dataset$VIOLATION_DATE <- as.Date(Dataset$VIOLATION_DATE, format = "%m/%d/%Y")
+    Dataset$Year <- year(Dataset$VIOLATION_DATE)
+
+    # Find the most common violation types
+    common_violations <- Dataset %>%
+      count(VIOLATION_DESCRIPTION) %>%
+      arrange(desc(n)) %>%
+      head(10) %>%
+      pull(VIOLATION_DESCRIPTION)
+
+    # Filter dataset for the most common violations
+    filtered_data <- Dataset %>% 
+      filter(VIOLATION_DESCRIPTION %in% common_violations)
+
+    # Group by year and violation description to calculate counts
+    violation_trends <- filtered_data %>%
+      group_by(Year, VIOLATION_DESCRIPTION) %>%
+      summarize(count = n()) %>%
+      ungroup()
+
+    # Plot trends over time
+    ggplot(violation_trends, aes(x = Year, y = count, color = VIOLATION_DESCRIPTION)) +
+      geom_line(linewidth = 1) +
+      labs(title = "Trends of Common Building Violations Over Time",
+           x = "Year",
+           y = "Number of Violations") +
+      theme_minimal() +
+      theme(legend.position = "right") +
+      scale_color_discrete(name = "Violation Description")
+    ggplot()
+    ```
+
+    ```{r}
+    # Load libraries
+    library(tidyverse)
+    library(ggplot2)
+    library(lubridate)
+    library(dplyr)
+
+    # Load dataset
+    Dataset <- read.csv("Building_Violations_Chicago.csv")
+
+    # Convert VIOLATION_DATE to Date format and extract Year
+    Dataset <- Dataset %>%
+      mutate(
+        VIOLATION_DATE = as.Date(VIOLATION_DATE, format = "%m/%d/%Y"),
+        Year = format(VIOLATION_DATE, "%Y")
+      )
+
+    # Group by VIOLATION_DESCRIPTION and Year, count occurrences
+    violations_by_year <- Dataset %>%
+      group_by(VIOLATION_DESCRIPTION, Year) %>%
+      summarise(Number_of_Cases = n(), .groups = "drop") %>%
+      arrange(desc(Number_of_Cases))
+
+    # Select the top 10 most common violations for each year
+    top_violations_by_year <- violations_by_year %>%
+      group_by(Year) %>%
+      slice_max(Number_of_Cases, n = 10) %>%
+      ungroup() %>%
+      arrange(Year, desc(Number_of_Cases))
+
+    # Select columns in the desired order
+    top_violations_by_year <- top_violations_by_year %>%
+      select(VIOLATION_DESCRIPTION, Year, Number_of_Cases)
+
+    # View the data
+    print(top_violations_by_year)
+
+    ```
+
+2.  Which neighborhoods or areas in Chicago have the highest number of building violations?
+
+    ```{r}
+    # Load necessary library
+    library(ggplot2)
+    library(dplyr)
+
+    # Load dataset
+    Dataset <- read.csv("Building_Violations_Chicago.csv")
+
+    # Count violations by STREET_ADDRESS and get the top 10 addresses
+    top_addresses <- Dataset %>%
+      group_by(STREET_ADDRESS) %>%
+      summarise(Violation_Count = n()) %>%
+      arrange(desc(Violation_Count)) %>%
+      top_n(10, Violation_Count)
+    top_addresses
+
+    # Create plot
+    ggplot(top_addresses, aes(x = reorder(STREET_ADDRESS, -Violation_Count), y = Violation_Count, fill = Violation_Count)) +
+      geom_bar(stat = "identity") +
+      labs(title = "Top 10 Chicago Addresses with the Most Building Violations",
+           x = "Street Address",
+           y = "Number of Violations") +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1),
+            legend.position = "none") +
+      scale_fill_gradient(high = "blue", low = "lightblue")
+    ```
+
+3.  How long, on average, does it take for violations to be resolved after they are reported?
+
+    ```{r}
+    # Load libraries
+    library(ggplot2)
+    library(dplyr)
+    library(lubridate)
+
+    # Load Dataset
+    building_violations <- read.csv("Building_Violations_Chicago.csv")
+
+    # Convert dates to Date type
+    building_violations$VIOLATION_DATE <- as.Date(building_violations$VIOLATION_DATE, format = "%m/%d/%Y")
+    building_violations$VIOLATION_STATUS_DATE <- as.Date(building_violations$VIOLATION_STATUS_DATE, format = "%m/%d/%Y")
+
+    # Filter for violations with status "COMPLIED"
+    complied_violations <- building_violations %>%
+      filter(VIOLATION_STATUS == "COMPLIED")
+
+    # Calculate resolution time (in days)
+    complied_violations <- complied_violations %>%
+      mutate(Resolution_Time = as.numeric(difftime(VIOLATION_STATUS_DATE, VIOLATION_DATE, units = "days"))) %>%
+      filter(!is.na(Resolution_Time) & Resolution_Time >= 0)
+
+    # Calculate average resolution time by violation description
+    avg_resolution_time <- complied_violations %>%
+      group_by(VIOLATION_DESCRIPTION) %>%
+      summarise(Average_Resolution_Time = mean(Resolution_Time, na.rm = TRUE)) %>%
+      arrange(Average_Resolution_Time)
+
+    # Top 10 violations with shortest resolution time
+    Top_10 <- avg_resolution_time %>% top_n(-10, Average_Resolution_Time)
+    Top_10
+
+    # Bottom 10 violations with longest resolution time
+    Bottom_10 <- avg_resolution_time %>% top_n(10, Average_Resolution_Time)
+    Bottom_10
+
+    # Plot for Top 10
+    ggplot(Top_10, aes(x = reorder(VIOLATION_DESCRIPTION, Average_Resolution_Time), y = Average_Resolution_Time, fill = Average_Resolution_Time)) +
+      geom_bar(stat = "identity") +
+      coord_flip() +
+      labs(title = "Top 10 Violations\nwith Shortest Average Resolution Time",
+           x = "Violation Description",
+           y = "Average Resolution Time (Days)") +
+      theme_minimal() +
+      scale_fill_gradient(low = "lightgreen", high = "darkgreen") +
+      theme(plot.title = element_text(hjust = 0.5))
+
+    # Plot for Bottom 10
+    ggplot(Bottom_10, aes(x = reorder(VIOLATION_DESCRIPTION, -Average_Resolution_Time), y = Average_Resolution_Time, fill = Average_Resolution_Time)) +
+      geom_bar(stat = "identity") +
+      coord_flip() +
+      labs(title = "Top 10 Violations\nwith Longest Average Resolution Time",
+           x = "Violation Description",
+           y = "Average Resolution Time (Days)") +
+      theme_minimal() +
+      scale_fill_gradient(low = "lightcoral", high = "darkred") +
+      theme(plot.title = element_text(hjust = 0.5))
+    ```
+
+4.  Are there properties or owners that frequently violate building regulations?
+
+    ```{r}
+    # Load libraries
+    library(dplyr)
+    library(ggplot2)
+
+    # Load dataset
+    Dataset <- read.csv("Building_Violations_Chicago.csv")
+
+    # Identify Top 5 Properties
+    top_5_properties <- Dataset %>%
+      group_by(STREET_ADDRESS, PROPERTY_GROUP) %>%
+      summarise(Violation_Count = n(), .groups = "drop") %>%
+      arrange(desc(Violation_Count)) %>%
+      slice_head(n = 5)
+
+    # Create Combined Label "PROPERTY_GROUP" and "STREET_ADDRESS"
+    top_5_properties <- top_5_properties %>%
+      mutate(Combined_Label = paste("Group:", PROPERTY_GROUP, "-", STREET_ADDRESS))
+    top_5_properties
+
+    # Filter the data for top 5 properties
+    top_violations_data <- Dataset %>%
+      mutate(Combined_Label = paste("Group:", PROPERTY_GROUP, "-", STREET_ADDRESS)) %>%
+      filter(Combined_Label %in% top_5_properties$Combined_Label)
+
+    # Convert VIOLATION_DATE to Date format
+    top_violations_data$VIOLATION_DATE <- as.Date(top_violations_data$VIOLATION_DATE, format = "%m/%d/%Y")
+
+    # Plot the faceted histogram for the Top 5 properties
+    ggplot(top_violations_data, aes(x = VIOLATION_DATE)) +
+      geom_histogram(binwidth = 30, fill = "steelblue", color = "black") +
+      facet_wrap(~ Combined_Label, scales = "free_y") +
+      labs(
+        title = "Violation Distribution for Top 5 Violating Properties",
+        x = "Violation Date",
+        y = "Count of Violations"
+      ) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    ```
+
+5.  Are there particular times of the year when violations are more prevalent? Are there seasonal patterns?
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+
+# Read the CSV file
+Dataset <- read.csv("Building_Violations_Chicago.csv", stringsAsFactors = FALSE)
+
+# Convert VIOLATION_DATE to Date format
+Dataset$VIOLATION_DATE <- as.Date(Dataset$VIOLATION_DATE, format = "%m/%d/%Y")
+
+# Extract year and month from the violation date
+Dataset$Year <- year(Dataset$VIOLATION_DATE)
+Dataset$Month <- month(Dataset$VIOLATION_DATE, label = TRUE, abbr = TRUE)
+
+# Count violations per month for each year
+monthly_violations <- Dataset %>%
+  group_by(Year, Month) %>%
+  summarise(Violations = n(), .groups = 'drop')
+monthly_violations
+
+# Create a boxplot of violations by month across all years
+ggplot(monthly_violations, aes(x = Month, y = Violations)) +
+  geom_boxplot(fill = "blue", color = "black") +
+  labs(title = "Boxplot of Building Violations by Month",
+       x = "Month",
+       y = "Number of Violations") +
+  theme_minimal()
+```
